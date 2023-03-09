@@ -460,8 +460,6 @@ inline Vector CrossProduct(const Vector& a, const Vector& b)
 {
     return Vector(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
-#else
-#include "runtime.h"
 #endif
 //
 // Constants shared by the engine and dlls
@@ -1158,7 +1156,6 @@ enum
     kRenderFxClampMinScale,      // Keep this sprite from getting very small (SPRITES only!)
 };
 
-
 typedef int func_t;
 
 typedef unsigned char uint8_t;
@@ -1206,24 +1203,6 @@ typedef struct link_s
 } link_t;
 
 typedef struct edict_s edict_t;
-
-typedef struct
-{
-    Vector normal;
-    float dist;
-} plane_t;
-
-typedef struct
-{
-    qboolean allsolid;           // if true, plane is not valid
-    qboolean startsolid;         // if true, the initial point was in a solid area
-    qboolean inopen, inwater;
-    float fraction;              // time completed, 1.0f = didn't hit anything
-    Vector endpos;               // final position
-    plane_t plane;               // surface normal at impact
-    edict_t* ent;                // entity the surface is on
-    int hitgroup;                // 0 == generic, non zero is specific body part
-} trace_t;
 
 
 #define FCVAR_ARCHIVE      (1 << 0)     // set to cause it to be saved to vars.rc
@@ -1338,21 +1317,6 @@ typedef struct cvar_s
 #define DLLEXPORT               /* */
 #endif
 
-// Returned by TraceLine
-typedef struct
-{
-    int fAllSolid;               // if true, plane is not valid
-    int fStartSolid;             // if true, the initial point was in a solid area
-    int fInOpen;
-    int fInWater;
-    float flFraction;            // time completed, 1.0f = didn't hit anything
-    Vector vecEndPos;            // final position
-    float flPlaneDist;
-    Vector vecPlaneNormal;       // surface normal at impact
-    edict_t* pHit;               // entity the surface is on
-    int iHitgroup;               // 0 == generic, non zero is specific body part
-} TraceResult;
-
 // CD audio status
 typedef struct
 {
@@ -1368,6 +1332,690 @@ typedef struct
 } CDStatus;
 
 typedef uint32 CRC32_t;
+
+//
+// Namespace: Math
+// Utility mathematical functions.
+//
+namespace Math
+{
+    const float MATH_ONEPSILON = 0.01f;
+    const float MATH_EQEPSILON = 0.001f;
+    const float MATH_FLEPSILON = 1.192092896e-07f;
+
+    //
+    // Constant: MATH_PI
+    // Mathematical PI value.
+    //
+    const float MATH_PI = 3.14159265358f;
+    const float MATH_D2R = MATH_PI * 0.00555555555f;
+    const float MATH_R2D = 180.0f / MATH_PI;
+
+    //
+    // Function: FltZero
+    //
+    // Checks whether input entry float is zero.
+    //
+    // Parameters:
+    //   entry - Input float.
+    //
+    // Returns:
+    //   True if float is zero, false otherwise.
+    //
+    // See Also:
+    //   <FltEqual>
+    //
+    // Remarks:
+    //   This eliminates Intel C++ Compiler's warning about float equality/inquality.
+    //
+    inline bool FltZero(float entry)
+    {
+        return fabsf(entry) < MATH_ONEPSILON;
+    }
+
+    //
+    // Function: FltEqual
+    //
+    // Checks whether input floats are equal.
+    //
+    // Parameters:
+    //   entry1 - First entry float.
+    //   entry2 - Second entry float.
+    //
+    // Returns:
+    //   True if floats are equal, false otherwise.
+    //
+    // See Also:
+    //   <FltZero>
+    //
+    // Remarks:
+    //   This eliminates Intel C++ Compiler's warning about float equality/inquality.
+    //
+    inline bool FltEqual(float entry1, float entry2)
+    {
+        return fabsf(entry1 - entry2) < MATH_EQEPSILON;
+    }
+
+    //
+    // Function: RadianToDegree
+    //
+    //  Converts radians to degrees.
+    //
+    // Parameters:
+    //   radian - Input radian.
+    //
+    // Returns:
+    //   Degree converted from radian.
+    //
+    // See Also:
+    //   <DegreeToRadian>
+    //
+    inline float RadianToDegree(float radian)
+    {
+        return radian * MATH_R2D;
+    }
+
+    //
+    // Function: DegreeToRadian
+    //
+    // Converts degrees to radians.
+    //
+    // Parameters:
+    //   degree - Input degree.
+    //
+    // Returns:
+    //   Radian converted from degree.
+    //
+    // See Also:
+    //   <RadianToDegree>
+    //
+    inline float DegreeToRadian(float degree)
+    {
+        return degree * MATH_D2R;
+    }
+
+    //
+    // Function: AngleMod
+    //
+    // Adds or subtracts 360.0f enough times need to given angle in order to set it into the range [0.0, 360.0f).
+    //
+    // Parameters:
+    //	  angle - Input angle.
+    //
+    // Returns:
+    //   Resulting angle.
+    //
+    inline float AngleMod(float angle)
+    {
+        return 360.0f / 65536.0f * (static_cast <int> (angle * (65536.0f / 360.0f)) & 65535);
+    }
+
+    //
+    // Function: AngleNormalize
+    //
+    // Adds or subtracts 360.0f enough times need to given angle in order to set it into the range [-180.0, 180.0f).
+    //
+    // Parameters:
+    //	  angle - Input angle.
+    //
+    // Returns:
+    //   Resulting angle.
+    //
+    inline float AngleNormalize(float angle)
+    {
+        return 360.0f / 65536.0f * (static_cast <int> ((angle + 180.0f) * (65536.0f / 360.0f)) & 65535) - 180.0f;
+    }
+
+    //
+    // Function: SineCosine
+    //
+    // Very fast platform-dependent sine and cosine calculation routine.
+    //
+    // Parameters:
+    //	  radians - Input degree (angle).
+    //	  sine - Output for Sine.
+    //	  cosine - Output for Cosine.
+    //
+    void inline SineCosine(float radians, float& sine, float& cosine)
+    {
+#if defined (PLATFORM_WIN32)
+        __asm
+        {
+            fld uint32_t ptr[radians]
+            fsincos
+
+            mov edx, uint32_t ptr[cosine]
+            mov eax, uint32_t ptr[sine]
+
+            fstp uint32_t ptr[edx]
+            fstp uint32_t ptr[eax]
+        }
+#else
+        sine = sinf(radians);
+        cosine = cosf(radians);
+#endif
+    }
+}
+
+//
+// Class: Vector
+// Standard 3-dimensional vector.
+//
+class Vector
+{
+    //
+    // Group: Variables.
+    //
+public:
+    //
+    // Variable: x,y,z
+    // X, Y and Z axis members.
+    //
+    float x, y, z;
+
+    //
+    // Group: (Con/De)structors.
+    //
+public:
+    //
+    // Function: Vector
+    //
+    // Constructs Vector from float, and assign it's value to all axises.
+    //
+    // Parameters:
+    //	  scaler - Value for axises.
+    //
+    inline Vector(float scaler = 0.0f) : x(scaler), y(scaler), z(scaler)
+    {
+    }
+
+    //
+    // Function: Vector
+    //
+    // Standard Vector Constructor.
+    //
+    // Parameters:
+    //	  inputX - Input X axis.
+    //	  inputY - Input Y axis.
+    //	  inputZ - Input Z axis.
+    //
+    inline Vector(float inputX, float inputY, float inputZ) : x(inputX), y(inputY), z(inputZ)
+    {
+    }
+
+    //
+    // Function: Vector
+    //
+    // Constructs Vector from float pointer.
+    //
+    // Parameters:
+    //	  other - Float pointer.
+    //
+    inline Vector(float* other) : x(other[0]), y(other[1]), z(other[2])
+    {
+    }
+
+    //
+    // Function: Vector
+    //
+    // Constructs Vector from another Vector.
+    //
+    // Parameters:
+    //   right - Other Vector, that should be assigned.
+    //
+    inline Vector(const Vector& right) : x(right.x), y(right.y), z(right.z)
+    {
+    }
+    //
+    // Group: Operators.
+    //
+public:
+    inline operator float* (void)
+    {
+        return &x;
+    }
+
+    inline operator const float* (void) const
+    {
+        return &x;
+    }
+
+    inline float& operator [] (int index)
+    {
+        return (&x)[index];
+    }
+
+    inline const float& operator [] (int index) const
+    {
+        return (&x)[index];
+    }
+
+    inline const Vector operator + (const Vector& right) const
+    {
+        return Vector(x + right.x, y + right.y, z + right.z);
+    }
+
+    inline const Vector operator - (const Vector& right) const
+    {
+        return Vector(x - right.x, y - right.y, z - right.z);
+    }
+
+    inline const Vector operator - (void) const
+    {
+        return Vector(-x, -y, -z);
+    }
+
+    friend inline const Vector operator * (const float vec, const Vector& right)
+    {
+        return Vector(right.x * vec, right.y * vec, right.z * vec);
+    }
+
+    inline const Vector operator * (float vec) const
+    {
+        return Vector(vec * x, vec * y, vec * z);
+    }
+
+    inline const Vector operator / (float vec) const
+    {
+        const float inv = 1 / vec;
+        return Vector(inv * x, inv * y, inv * z);
+    }
+
+    inline const Vector operator ^ (const Vector& right) const
+    {
+        return Vector(y * right.z - z * right.y, z * right.x - x * right.z, x * right.y - y * right.x);
+    }
+
+    inline float operator | (const Vector& right) const
+    {
+        return x * right.x + y * right.y + z * right.z;
+    }
+
+    inline const Vector& operator += (const Vector& right)
+    {
+        x += right.x;
+        y += right.y;
+        z += right.z;
+
+        return *this;
+    }
+
+    inline const Vector& operator -= (const Vector& right)
+    {
+        x -= right.x;
+        y -= right.y;
+        z -= right.z;
+
+        return *this;
+    }
+
+    inline const Vector& operator *= (float vec)
+    {
+        x *= vec;
+        y *= vec;
+        z *= vec;
+
+        return *this;
+    }
+
+    inline const Vector& operator /= (float vec)
+    {
+        const float inv = 1 / vec;
+
+        x *= inv;
+        y *= inv;
+        z *= inv;
+
+        return *this;
+    }
+
+    inline bool operator == (const Vector& right) const
+    {
+        return Math::FltEqual(x, right.x) && Math::FltEqual(y, right.y) && Math::FltEqual(z, right.z);
+    }
+
+    inline bool operator != (const Vector& right) const
+    {
+        return !Math::FltEqual(x, right.x) && !Math::FltEqual(y, right.y) && !Math::FltEqual(z, right.z);
+    }
+
+    inline const Vector& operator = (const Vector& right)
+    {
+        x = right.x;
+        y = right.y;
+        z = right.z;
+
+        return *this;
+    }
+    //
+    // Group: Functions.
+    //
+public:
+
+    //
+    // Function: GetLength
+    //
+    // Gets length (magnitude) of 3D vector.
+    //
+    // Returns:
+    //   Length (magnitude) of the 3D vector.
+    //
+    // See Also:
+    //   <GetLengthSquared>
+    //
+    inline float GetLength(void) const
+    {
+        float number = x * x + y * y + z * z;
+#ifdef __SSE2__
+        return _mm_cvtss_f32(_mm_sqrt_ss(_mm_load_ss(&number)));
+#else
+        long i;
+        float x2, y;
+        const float threehalfs = 1.5F;
+        x2 = number * 0.5F;
+        y = number;
+        i = *(long*)&y;
+        i = 0x5f3759df - (i >> 1);
+        y = *(float*)&i;
+        y = y * (threehalfs - (x2 * y * y));
+        return y * number;
+#endif
+    }
+
+    //
+    // Function: GetLength2D
+    //
+    // Gets length (magnitude) of vector ignoring Z axis.
+    //
+    // Returns:
+    //   2D length (magnitude) of the vector.
+    //
+    // See Also:
+    //   <GetLengthSquared2D>
+    //
+    inline float GetLength2D(void) const
+    {
+#ifdef __SSE2__
+        float number = _mm_cvtss_f32(_mm_add_ss(_mm_mul_ss(_mm_load_ss(&x), _mm_load_ss(&x)), _mm_mul_ss(_mm_load_ss(&y), _mm_load_ss(&y))));
+        return _mm_cvtss_f32(_mm_sqrt_ss(_mm_load_ss(&number)));
+#else
+        float number = x * x + y * y;
+        long i;
+        float x2, y;
+        const float threehalfs = 1.5F;
+        x2 = number * 0.5F;
+        y = number;
+        i = *(long*)&y;
+        i = 0x5f3759df - (i >> 1);
+        y = *(float*)&i;
+        y = y * (threehalfs - (x2 * y * y));
+        return y * number;
+#endif
+    }
+
+    //
+    // Function: GetLengthSquared
+    //
+    // Gets squared length (magnitude) of 3D vector.
+    //
+    // Returns:
+    //   Squared length (magnitude) of the 3D vector.
+    //
+    // See Also:
+    //   <GetLength>
+    //
+    inline float GetLengthSquared(void) const
+    {
+        return x * x + y * y + z * z;
+    }
+
+    //
+    // Function: GetLengthSquared2D
+    //
+    // Gets squared length (magnitude) of vector ignoring Z axis.
+    //
+    // Returns:
+    //   2D squared length (magnitude) of the vector.
+    //
+    // See Also:
+    //   <GetLength2D>
+    //
+    inline float GetLengthSquared2D(void) const
+    {
+        return x * x + y * y;
+    }
+
+    //
+    // Function: SkipZ
+    //
+    // Gets vector without Z axis.
+    //
+    // Returns:
+    //   2D vector from 3D vector.
+    //
+    inline Vector SkipZ(void) const
+    {
+        return Vector(x, y, 0.0f);
+    }
+
+    //
+    // Function: Normalize
+    //
+    // Normalizes a vector.
+    //
+    // Returns:
+    //   The previous length of the 3D vector.
+    //
+    inline Vector Normalize(void) const
+    {
+        float length = GetLength() + static_cast <float> (Math::MATH_FLEPSILON);
+
+        if (Math::FltZero(length))
+            return Vector(0, 0, 1.0f);
+
+        length = 1.0f / length;
+
+        return Vector(x * length, y * length, z * length);
+    }
+
+    //
+    // Function: Normalize
+    //
+    // Normalizes a 2D vector.
+    //
+    // Returns:
+    //   The previous length of the 2D vector.
+    //
+    inline Vector Normalize2D(void) const
+    {
+        float length = GetLength2D() + static_cast <float> (Math::MATH_FLEPSILON);
+
+        if (Math::FltZero(length))
+            return Vector(0, 1.0, 0);
+
+        length = 1.0f / length;
+
+        return Vector(x * length, y * length, 0.0f);
+    }
+
+    //
+    // Function: IsNull
+    //
+    // Checks whether vector is null.
+    //
+    // Returns:
+    //   True if this vector is (0.0f, 0.0f, 0.0f) within tolerance, false otherwise.
+    //
+    inline bool IsNull(void) const
+    {
+        return Math::FltZero(x) && Math::FltZero(y) && Math::FltZero(z);
+    }
+
+    //
+    // Function: GetNull
+    //
+    // Gets a nulled vector.
+    //
+    // Returns:
+    //   Nulled vector.
+    //
+    inline static const Vector& GetNull(void)
+    {
+        static const Vector& s_null = Vector(0.0, 0.0, 0.0f);
+        return s_null;
+    }
+
+    //
+    // Function: ClampAngles
+    //
+    // Clamps the angles (ignore Z component).
+    //
+    // Returns:
+    //   3D vector with clamped angles (ignore Z component).
+    //
+    inline Vector ClampAngles(void)
+    {
+        x = Math::AngleNormalize(x);
+        y = Math::AngleNormalize(y);
+        z = 0.0f;
+
+        return *this;
+    }
+
+    //
+    // Function: ToPitch
+    //
+    // Converts a spatial location determined by the vector passed into an absolute X angle (pitch) from the origin of the world.
+    //
+    // Returns:
+    //   Pitch angle.
+    //
+    inline float ToPitch(void) const
+    {
+        if (Math::FltZero(x) && Math::FltZero(y))
+            return 0.0f;
+
+        return Math::RadianToDegree(atan2f(z, GetLength2D()));
+    }
+
+    //
+    // Function: ToYaw
+    //
+    // Converts a spatial location determined by the vector passed into an absolute Y angle (yaw) from the origin of the world.
+    //
+    // Returns:
+    //   Yaw angle.
+    //
+    inline float ToYaw(void) const
+    {
+        if (Math::FltZero(x) && Math::FltZero(y))
+            return 0.0f;
+
+        return Math::RadianToDegree(atan2f(y, x));
+    }
+
+    //
+    // Function: ToAngles
+    //
+    // Convert a spatial location determined by the vector passed in into constant absolute angles from the origin of the world.
+    //
+    // Returns:
+    //   Converted from vector, constant angles.
+    //
+    inline Vector ToAngles(void) const
+    {
+        // is the input vector absolutely vertical?
+        if (Math::FltZero(x) && Math::FltZero(y))
+            return Vector(z > 0.0f ? 90.0f : 270.0f, 0.0, 0.0f);
+
+        // else it's another sort of vector compute individually the pitch and yaw corresponding to this vector.
+        return Vector(Math::RadianToDegree(atan2f(z, GetLength2D())), Math::RadianToDegree(atan2f(y, x)), 0.0f);
+    }
+
+    //
+    // Function: BuildVectors
+    //
+    //	Builds a 3D referential from a view angle, that is to say, the relative "forward", "right" and "upward" direction
+    // that a player would have if he were facing this view angle. World angles are stored in Vector structs too, the
+    // "x" component corresponding to the X angle (horizontal angle), and the "y" component corresponding to the Y angle
+    // (vertical angle).
+    //
+    // Parameters:
+    //   forward - Forward referential vector.
+    //   right - Right referential vector.
+    //   upward - Upward referential vector.
+    //
+    inline void BuildVectors(Vector* forward, Vector* right, Vector* upward) const
+    {
+        float sinePitch = 0.0f, cosinePitch = 0.0f, sineYaw = 0.0f, cosineYaw = 0.0f, sineRoll = 0.0f, cosineRoll = 0.0f;
+
+        Math::SineCosine(Math::DegreeToRadian(x), sinePitch, cosinePitch); // compute the sine and cosine of the pitch component
+        Math::SineCosine(Math::DegreeToRadian(y), sineYaw, cosineYaw); // compute the sine and cosine of the yaw component
+        Math::SineCosine(Math::DegreeToRadian(z), sineRoll, cosineRoll); // compute the sine and cosine of the roll component
+
+        if (forward != nullptr)
+        {
+            forward->x = cosinePitch * cosineYaw;
+            forward->y = cosinePitch * sineYaw;
+            forward->z = -sinePitch;
+        }
+
+        if (right != nullptr)
+        {
+            right->x = -sineRoll * sinePitch * cosineYaw + cosineRoll * sineYaw;
+            right->y = -sineRoll * sinePitch * sineYaw - cosineRoll * cosineYaw;
+            right->z = -sineRoll * cosinePitch;
+        }
+
+        if (upward != nullptr)
+        {
+            upward->x = cosineRoll * sinePitch * cosineYaw + sineRoll * sineYaw;
+            upward->y = cosineRoll * sinePitch * sineYaw - sineRoll * cosineYaw;
+            upward->z = cosineRoll * cosinePitch;
+        }
+    }
+};
+
+namespace Math
+{
+    inline bool BBoxIntersects(const Vector& min1, const Vector& max1, const Vector& min2, const Vector& max2)
+    {
+        return min1.x < max2.x&& max1.x > min2.x && min1.y < max2.y&& max1.y > min2.y && min1.z < max2.z&& max1.z > min2.z;
+    }
+}
+
+typedef struct
+{
+    Vector normal;
+    float dist;
+} plane_t;
+
+typedef struct
+{
+    qboolean allsolid;           // if true, plane is not valid
+    qboolean startsolid;         // if true, the initial point was in a solid area
+    qboolean inopen, inwater;
+    float fraction;              // time completed, 1.0f = didn't hit anything
+    Vector endpos;               // final position
+    plane_t plane;               // surface normal at impact
+    edict_t* ent;                // entity the surface is on
+    int hitgroup;                // 0 == generic, non zero is specific body part
+} trace_t;
+
+// Returned by TraceLine
+typedef struct
+{
+    int fAllSolid;               // if true, plane is not valid
+    int fStartSolid;             // if true, the initial point was in a solid area
+    int fInOpen;
+    int fInWater;
+    float flFraction;            // time completed, 1.0f = didn't hit anything
+    Vector vecEndPos;            // final position
+    float flPlaneDist;
+    Vector vecPlaneNormal;       // surface normal at impact
+    edict_t* pHit;               // entity the surface is on
+    int iHitgroup;               // 0 == generic, non zero is specific body part
+} TraceResult;
 
 // Engine hands this to DLLs for functionality callbacks
 typedef struct enginefuncs_s
@@ -1454,8 +2102,8 @@ typedef struct enginefuncs_s
     const char* (*pfnNameForFunction) (uint32 function);
     void (*pfnClientPrintf) (edict_t* pentEdict, PRINT_TYPE ptype, const char* szMsg);  // JOHN: engine callbacks so game DLL can print messages to individual clients
     void (*pfnServerPrint) (const char* szMsg);
-    const char* (*pfnCmd_Args) (void);   // these 3 added 
-    const char* (*pfnCmd_Argv) (int argc);       // so game DLL can easily 
+    const char* (*pfnCmd_Args) (void);   // these 3 added
+    const char* (*pfnCmd_Argv) (int argc);       // so game DLL can easily
     int (*pfnCmd_Argc) (void);   // access client 'cmd' strings
     void (*pfnGetAttachment) (const edict_t* pentEdict, int iAttachment, float* rgflOrigin, float* rgflAngles);
     void (*pfnCRC32_Init) (CRC32_t* pulCRC);
@@ -1539,6 +2187,11 @@ typedef struct enginefuncs_s
     void (*pfnQueryClientCvarValue) (const edict_t* player, const char* cvarName);
     void (*pfnQueryClientCvarValue2) (const edict_t* player, const char* cvarName, int requestID);
 } enginefuncs_t;
+
+// Must be provided by user of this code
+extern enginefuncs_t g_engfuncs;
+
+#include "runtime.h"
 
 // Passed to pfnKeyValue
 typedef struct KeyValueData_s
@@ -1660,10 +2313,6 @@ typedef struct
 #define PTR_TO_FLT(in) *(float *) (in)
 #define PTR_TO_INT(in) *(int *) (in)
 #define PTR_TO_STR(in) (char *) (in)
-
-
-// Must be provided by user of this code
-extern enginefuncs_t g_engfuncs;
 
 // The actual engine callbacks
 #define GETPLAYERUSERID (*g_engfuncs.pfnGetPlayerUserId)
@@ -1820,13 +2469,6 @@ typedef int BOOL;
 #define MAX_PATH PATH_MAX
 #include <limits.h>
 #include <stdarg.h>
-#ifndef min
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-#ifndef max
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-#define _vsnprintf(a,b,c,d) vsnprintf(a,b,c,d)
-#endif
 #endif //_WIN32
 
 
@@ -2606,6 +3248,8 @@ inline void STOP_SOUND(edict_t* entity, int channel, const char* sample)
 #define stricmp _stricmp
 #define unlink _unlink
 #define mkdir _mkdir
+#else
+#define stricmp strcasecmp
 #endif
 
    // macro to handle memory allocation fails

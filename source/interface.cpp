@@ -23,6 +23,7 @@
 //
 
 #include <core.h>
+#include <strings.h>
 
 // console vars
 ConVar ebot_password("ebot_password", "ebot", VARTYPE_PASSWORD);

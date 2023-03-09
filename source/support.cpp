@@ -731,6 +731,31 @@ void AutoLoadGameMode(void)
 	static int checkShowTextTime = 0;
 	checkShowTextTime++;
 
+    char* biohazard[] =
+    {
+        "plugins-biohazard",
+        "plugins-bio",
+        "plugins-bh"
+    };
+
+    char* bbVersion[] =
+    {
+        "plugins-basebuilder",
+        "plugins-bb"
+    };
+
+    char* zpGameVersion[] =
+    {
+        "plugins-zplague",  // ZP 4.3
+        "plugins-zp50_ammopacks", // ZP 5.0
+        "plugins-zp50_money", // ZP 5.0
+        "plugins-ze", // ZE
+        "plugins-zp", // ZP
+        "plugins-zescape", // ZE
+        "plugins-escape", // ZE
+        "plugins-plague" // ZP
+    };
+
 	// CS:BTE Support 
 	char* Plugin_INI = FormatBuffer("%s/addons/amxmodx/configs/bte_player.ini", GetModName());
 	if (TryFileOpen(Plugin_INI) || TryFileOpen(FormatBuffer("%s/addons/amxmodx/configs/bte_config/bte_blockresource.txt", GetModName())))
@@ -803,18 +828,6 @@ void AutoLoadGameMode(void)
 	}
 
 	// Zombie
-	char* zpGameVersion[] =
-	{
-		"plugins-zplague",  // ZP 4.3
-		"plugins-zp50_ammopacks", // ZP 5.0
-		"plugins-zp50_money", // ZP 5.0
-		"plugins-ze", // ZE
-		"plugins-zp", // ZP
-		"plugins-zescape", // ZE
-		"plugins-escape", // ZE
-		"plugins-plague" // ZP
-	};
-
 	for (int i = 0; i < 8; i++)
 	{
 		Plugin_INI = FormatBuffer("%s/addons/amxmodx/configs/%s.ini", GetModName(), zpGameVersion[i]);
@@ -846,12 +859,6 @@ void AutoLoadGameMode(void)
 	}
 
 	// Base Builder
-	char* bbVersion[] =
-	{
-		"plugins-basebuilder",
-		"plugins-bb"
-	};
-
 	for (int i = 0; i < 2; i++)
 	{
 		Plugin_INI = FormatBuffer("%s/addons/amxmodx/configs/%s.ini", GetModName(), bbVersion[i]);
@@ -911,13 +918,6 @@ void AutoLoadGameMode(void)
 	}
 
 	// Biohazard
-	char* biohazard[] =
-	{
-		"plugins-biohazard",
-		"plugins-bio",
-		"plugins-bh"
-	};
-
 	for (int i = 0; i < 3; i++)
 	{
 		Plugin_INI = FormatBuffer("%s/addons/amxmodx/configs/%s.ini", GetModName(), biohazard[i]);

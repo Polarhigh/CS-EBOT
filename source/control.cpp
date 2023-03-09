@@ -536,7 +536,7 @@ void BotControl::MaintainBotQuota(void)
 		int desiredBotCount = ebot_quota.GetInt();
 		
 		if (ebot_autovacate.GetBool())
-			desiredBotCount = __min(desiredBotCount, maxClients - (GetHumansNum() + 1));
+			desiredBotCount = std::min(desiredBotCount, maxClients - (GetHumansNum() + 1));
 		
 		if (botNumber > desiredBotCount)
 		{
