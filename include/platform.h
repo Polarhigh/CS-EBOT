@@ -56,6 +56,8 @@
 #ifdef PLATFORM_WIN32
 
 #include <direct.h>
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 
 #define DLL_ENTRYPOINT int STDCALL DllMain (void *, unsigned long dwReason, void *)
 #define DLL_DETACHING (dwReason == 0)
@@ -103,10 +105,6 @@ typedef void (*EntityPtr_t) (entvars_t*);
 #error "Platform unrecognized."
 #endif
 
-extern "C" void* DLLEXPORT GetProcAddress(void*, const char*);
-extern "C" void* DLLEXPORT LoadLibraryA(const char*);
-extern "C" int DLLEXPORT FreeLibrary(void*);
-
 // library wrapper
 class Library
 {
@@ -133,7 +131,7 @@ public:
             return;
 
 #ifdef PLATFORM_WIN32
-        FreeLibrary(m_ptr);
+        FreeLibrary((HMODULE)m_ptr);
 #else
         dlclose(m_ptr);
 #endif
@@ -146,7 +144,7 @@ public:
             return NULL;
 
 #ifdef PLATFORM_WIN32
-        return GetProcAddress(m_ptr, functionName);
+        return GetProcAddress((HMODULE)m_ptr, functionName);
 #else
         return dlsym(m_ptr, functionName);
 #endif

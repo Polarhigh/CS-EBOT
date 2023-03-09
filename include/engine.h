@@ -3311,7 +3311,7 @@ unsigned short FixedUnsigned16(float value, float scale);
 
 #undef DLLEXPORT
 #ifdef _WIN32
-#define DLLEXPORT   __declspec(dllexport)
+#define DLLEXPORT __declspec(dllexport)
 #elif defined(linux)
 #define DLLEXPORT               /* */
 #define WINAPI                  /* */
