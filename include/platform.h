@@ -43,13 +43,13 @@
 #define COMPILER_MINGW32 __MINGW32__
 #endif
 
-// configure export macros
+// configure export_fun macros
 #if defined (COMPILER_VISUALC) || defined (COMPILER_MINGW32)
-#define export extern "C" __declspec (dllexport)
+#define export_fun extern "C" __declspec (dllexport)
 #elif defined (PLATFORM_LINUX32) || defined (PLATFORM_LINUX64) || defined (COMPILER_BORLAND)
-#define export extern "C"
+#define export_fun extern "C"
 #else
-#error "Can't configure export macros. Compiler unrecognized."
+#error "Can't configure export_fun macros. Compiler unrecognized."
 #endif
 
 // operating system specific macros, functions and typedefs
@@ -64,10 +64,10 @@
 #if defined (COMPILER_VISUALC)
 #define DLL_GIVEFNPTRSTODLL extern "C" void STDCALL
 #elif defined (COMPILER_MINGW32)
-#define DLL_GIVEFNPTRSTODLL export void STDCALL
+#define DLL_GIVEFNPTRSTODLL export_fun void STDCALL
 #endif
 
-// specify export parameter
+// specify export_fun parameter
 #if defined (COMPILER_VISUALC) && (COMPILER_VISUALC > 1000)
 #pragma comment (linker, "/EXPORT:GiveFnptrsToDll=_GiveFnptrsToDll@8,@1")
 #pragma comment (linker, "/SECTION:.data,RW")
