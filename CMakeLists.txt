@@ -29,7 +29,9 @@ target_precompile_headers(${PROJECT_NAME} PUBLIC
 # compiler & linker options
 #-----------
 if (UNIX)
-    target_compile_options(${PROJECT_NAME} PRIVATE -fpermissive)
+    target_compile_options(${PROJECT_NAME} PRIVATE -fpermissive -m32)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+            LINK_FLAGS "-m32")
 
     if (CMAKE_BUILD_TYPE MATCHES Release)
         target_compile_options(${PROJECT_NAME} PRIVATE -O2)
