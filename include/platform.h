@@ -93,8 +93,6 @@ typedef void (*EntityPtr_t) (entvars_t*);
 #define DLL_RETENTRY return
 #define DLL_GIVEFNPTRSTODLL extern "C" void
 
-inline uint32 _lrotl(uint32 x, int r) { return (x << r) | (x >> (sizeof(x) * 8 - r)); }
-
 typedef int (*EntityAPI_t) (DLL_FUNCTIONS*, int);
 typedef int (*NewEntityAPI_t) (NEW_DLL_FUNCTIONS*, int*);
 typedef int (*BlendAPI_t) (int, void**, void*, float(*)[3][4], float(*)[128][3][4]);
